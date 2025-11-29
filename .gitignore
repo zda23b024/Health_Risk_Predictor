@@ -1,0 +1,22 @@
+# Python virtual environment
+backend/venv/
+backend/task_venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# SQLite database
+backend/health.db
+
+# React dependencies
+frontend/node_modules/
+frontend/build/
+
+# Environment files
+*.env
+
+
+# PyCharm IDE files
+.idea/
+*.iml

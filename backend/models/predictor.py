@@ -1,76 +1,38 @@
-"""
-predictor.py
+from flask import Blueprint, request, jsonify
+from models.predictor import get_predictor
 
-Module 3: Health Risk Predictor - Model Loader & Predictor
-
-Loads the trained Decision Tree model from decision_tree.pkl
-and exposes a simple function to predict the health risk level
-(Low / Medium / High) based on user input features.
-"""
-
-from pathlib import Path
-from typing import Dict, Any
-
-import joblib
-import numpy as np
-
-# Path to model file: backend/ml/decision_tree.pkl
-BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
-MODEL_PATH = BASE_DIR / "ml" / "decision_tree.pkl"
+predict_bp = Blueprint("predict", __name__)
 
 
-class HealthRiskPredictor:
-    def __init__(self, model_path: Path):
-        if not model_path.exists():
-            raise FileNotFoundError(
-                f"Model file not found at: {model_path}. "
-                f"Please train the model with ml/train_model.py first."
-            )
-
-        saved = joblib.load(model_path)
-        self.model = saved["model"]
-        self.label_encoder = saved["label_encoder"]
-
-    def predict(self, weight: float, steps: int, water_intake: float, sleep_hours: float) -> Dict[str, Any]:
-        """
-        Predict the risk label and return both the label and probabilities.
-        """
-        # Prepare a 2D array with one sample: shape (1, 4)
-        features = np.array([[weight, steps, water_intake, sleep_hours]], dtype=float)
-
-        # Predict class index
-        class_idx = self.model.predict(features)[0]
-        risk_label = self.label_encoder.inverse_transform([class_idx])[0]
-
-        # Predict probabilities (for all classes)
-        if hasattr(self.model, "predict_proba"):
-            probs = self.model.predict_proba(features)[0]  # shape (n_classes,)
-            # Map each class label to its probability
-            class_labels = self.label_encoder.inverse_transform(
-                np.arange(len(probs))
-            )
-            probabilities = {
-                label: float(prob)
-                for label, prob in zip(class_labels, probs)
-            }
-        else:
-            probabilities = {}
-
-        return {
-            "risk_label": risk_label,
-            "probabilities": probabilities,
-        }
-
-
-# Singleton-style predictor instance (loaded at import time)
-_predictor_instance: HealthRiskPredictor | None = None
-
-
-def get_predictor() -> HealthRiskPredictor:
+@predict_bp.route("/health/predict", methods=["POST"])
+def predict_health_risk():
     """
-    Lazily initialize and return a singleton HealthRiskPredictor instance.
+    Predict health risk.
+
+    Expected JSON:
+    {
+        "weight": 70.5,
+        "steps": 8000,
+        "water_intake": 2.5,
+        "sleep_hours": 7.0
+    }
     """
-    global _predictor_instance
-    if _predictor_instance is None:
-        _predictor_instance = HealthRiskPredictor(MODEL_PATH)
-    return _predictor_instance
+    data = request.get_json() or {}
+
+    required = ["weight", "steps", "water_intake", "sleep_hours"]
+    missing = [f for f in required if f not in data]
+    if missing:
+        return jsonify({"error": f"Missing field(s): {', '.join(missing)}"}), 400
+
+    try:
+        weight = float(data["weight"])
+        steps = int(data["steps"])
+        water_intake = float(data["water_intake"])
+        sleep_hours = float(data["sleep_hours"])
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid data types"}), 400
+
+    predictor = get_predictor()
+    result = predictor.predict(weight, steps, water_intake, sleep_hours)
+
+    return jsonify(result), 200

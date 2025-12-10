@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from flask import Blueprint, jsonify
 from backend.database import get_connection
 
@@ -109,3 +110,5 @@ def get_health_stats():
             "summary": summary,
         }
     ), 200
+=======
+>>>>>>> ff773de18b3d3363899ec4e297bd8ba059d3677d

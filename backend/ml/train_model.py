@@ -1,3 +1,29 @@
+"""
+train_model.py
+
+Module 3: Health Risk Predictor - Training Script
+
+This script trains a Decision Tree classifier to predict a
+health risk category (e.g., Low / Medium / High) based on
+simple lifestyle features:
+
+    - weight (kg)
+    - steps (per day)
+    - water_intake (liters/day)
+    - sleep_hours (hours/night)
+
+It expects a CSV file with at least the following columns:
+    weight, steps, water_intake, sleep_hours, risk_label
+
+The trained model + label encoder are saved to:
+    decision_tree.pkl
+inside the same 'ml' directory.
+
+Run from the backend folder:
+    cd backend
+    python -m ml.train_model
+"""
+
 from pathlib import Path
 
 import joblib
@@ -8,15 +34,24 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.tree import DecisionTreeClassifier
 
-BASE_DIR = Path(__file__).resolve().parent
-DATA_PATH = BASE_DIR / "health_data.csv"
+
+# ---------- Paths & settings ----------
+
+BASE_DIR = Path(__file__).resolve().parent  # backend/ml
+DATA_PATH = BASE_DIR / "health_data_1000.csv"   # <- put your dataset here
 MODEL_PATH = BASE_DIR / "decision_tree.pkl"
 
 RANDOM_STATE = 42
-TEST_SIZE = 0.2
+TEST_SIZE = 0.2  # 20% of data for testing
 
 
 def load_data(csv_path: Path) -> pd.DataFrame:
+    """
+    Load the dataset from CSV.
+
+    The CSV must contain:
+        weight, steps, water_intake, sleep_hours, risk_label
+    """
     if not csv_path.exists():
         raise FileNotFoundError(f"Dataset not found at: {csv_path}")
 
@@ -31,20 +66,30 @@ def load_data(csv_path: Path) -> pd.DataFrame:
     ]
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
-        raise ValueError(f"Missing required column(s): {missing}")
+        raise ValueError(f"Missing required column(s) in CSV: {missing}")
 
+    # Drop rows with missing values in key columns
     df = df.dropna(subset=required_cols)
+
     if df.empty:
-        raise ValueError("No data left after dropping missing rows.")
+        raise ValueError("No data left after dropping rows with missing values.")
 
     return df
 
 
 def preprocess_data(df: pd.DataFrame):
+    """
+    Prepare features (X) and labels (y) for training.
+
+    Returns:
+        X_train, X_test, y_train, y_test, label_encoder
+    """
     feature_cols = ["weight", "steps", "water_intake", "sleep_hours"]
     X = df[feature_cols].astype(float)
+
     y_raw = df["risk_label"].astype(str)
 
+    # Encode string labels (Low/Medium/High) to integers (0,1,2,...)
     label_encoder = LabelEncoder()
     y = label_encoder.fit_transform(y_raw)
 
@@ -53,12 +98,19 @@ def preprocess_data(df: pd.DataFrame):
         y,
         test_size=TEST_SIZE,
         random_state=RANDOM_STATE,
-        stratify=y,
+        stratify=y,  # keeps class balance
     )
+
     return X_train, X_test, y_train, y_test, label_encoder
 
 
 def train_model(X_train, y_train) -> DecisionTreeClassifier:
+    """
+    Train a Decision Tree classifier.
+
+    You can tweak hyperparameters (max_depth, min_samples_split, etc.)
+    based on performance.
+    """
     model = DecisionTreeClassifier(
         criterion="gini",
         max_depth=4,
@@ -69,18 +121,30 @@ def train_model(X_train, y_train) -> DecisionTreeClassifier:
 
 
 def evaluate_model(model, X_test, y_test, label_encoder: LabelEncoder):
+    """
+    Print basic evaluation metrics on the test set.
+    """
     y_pred = model.predict(X_test)
+
     acc = accuracy_score(y_test, y_pred)
     print(f"\nTest Accuracy: {acc:.3f}")
 
+    # Convert back to original labels for a nicer report
     y_test_labels = label_encoder.inverse_transform(y_test)
     y_pred_labels = label_encoder.inverse_transform(y_pred)
+
     print("\nClassification Report:")
     print(classification_report(y_test_labels, y_pred_labels))
 
 
 def save_model(model, label_encoder: LabelEncoder, path: Path):
-    to_save = {"model": model, "label_encoder": label_encoder}
+    """
+    Save the trained model and label encoder to disk as a single .pkl.
+    """
+    to_save = {
+        "model": model,
+        "label_encoder": label_encoder,
+    }
     joblib.dump(to_save, path)
     print(f"\nModel saved to: {path}")
 
@@ -97,6 +161,7 @@ def main():
 
     model = train_model(X_train, y_train)
     evaluate_model(model, X_test, y_test, label_encoder)
+
     save_model(model, label_encoder, MODEL_PATH)
 
 

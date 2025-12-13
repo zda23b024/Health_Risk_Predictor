@@ -10,5 +10,8 @@
     "type": "git",
     "url": "https://github.com/zda23b024/Health_Risk_Predictor.git"
   },
-  "private": true
+  "private": true,
+  "dependencies": {
+    "recharts": "^3.5.1"
+  }
 }

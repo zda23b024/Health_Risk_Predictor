@@ -1,11 +1,7 @@
-
 from flask import Flask
 from flask_cors import CORS
-
 from database import init_db
 from routes.health_routes import health_bp
-from routes.stats_routes import stats_bp
-from routes.predict_routes import predict_bp
 
 
 def create_app():

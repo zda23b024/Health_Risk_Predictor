@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+=======
 
 from flask import Flask
 from flask_cors import CORS
@@ -28,3 +30,4 @@ if __name__ == "__main__":
     init_db()
     # Run dev server
     app.run(host="0.0.0.0", port=5000, debug=True)
+>>>>>>> f05f78b12de6668b546f2df13b1b5687f4682e92

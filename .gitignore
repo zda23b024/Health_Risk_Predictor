@@ -11,7 +11,8 @@ backend/health.db
 
 # React dependencies
 frontend/node_modules/
-frontend/build/
+frontend/react_frontend/build/
+frontend/react_frontend/node_modules/
 
 # Environment files
 *.env

@@ -1,4 +1,4 @@
-
+import os
 from flask import Flask
 from flask_cors import CORS
 
@@ -12,8 +12,15 @@ from routes.auth_routes import auth_bp
 def create_app():
     app = Flask(__name__)
 
-    # Enable CORS for all origins (simplest for local dev)
-    CORS(app)
+    # Optional: keep config centralized
+    app.config["DATABASE_URL"] = os.getenv("DATABASE_URL")
+
+    # CORS (Render + local)
+    allowed_origins = os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:5173"
+    )
+    CORS(app, resources={r"/*": {"origins": allowed_origins.split(",")}})
 
     # Register blueprints
     app.register_blueprint(health_bp)
@@ -21,14 +28,14 @@ def create_app():
     app.register_blueprint(predict_bp)
     app.register_blueprint(auth_bp)
 
+    # Initialize DB (safe to call on startup)
+    with app.app_context():
+        init_db()
+
     return app
 
 
 app = create_app()
 
-
 if __name__ == "__main__":
-    # Create tables if not exist
-    init_db()
-    # Run dev server
     app.run(host="0.0.0.0", port=5000, debug=True)

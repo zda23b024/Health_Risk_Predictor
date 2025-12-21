@@ -1,0 +1,26 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: health_backend
+    ports:
+      - "5001:5000" # Host 5001 -> container 5000
+    volumes:
+      - ./backend/health.db:/app/health.db
+      - ./backend/ml:/app/ml
+    environment:
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend-react
+      args:
+        REACT_APP_API_URL: "http://localhost:5001"
+    container_name: health_frontend
+    ports:
+      - "3001:80" # Host 3001 -> nginx 80
+    depends_on:
+      - backend
+    restart: unless-stopped

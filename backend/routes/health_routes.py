@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from datetime import date
 from database import get_connection
+from routes.auth_routes import get_current_user_id_from_request
 
 
 health_bp = Blueprint("health", __name__)
@@ -19,6 +20,10 @@ def add_health_entry():
         "sleep_hours": 7.0
     }
     """
+    user_id = get_current_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
     data = request.get_json() or {}
 
     entry_date = data.get("entry_date") or date.today().isoformat()
@@ -34,19 +39,25 @@ def add_health_entry():
     conn = get_connection()
     cursor = conn.cursor()
 
+    # One entry per user per day (UPSERT)
     cursor.execute(
         """
-        INSERT INTO health_logs (entry_date, weight, steps, water_intake, sleep_hours)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO health_logs (user_id, entry_date, weight, steps, water_intake, sleep_hours)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, entry_date) DO UPDATE SET
+            weight=excluded.weight,
+            steps=excluded.steps,
+            water_intake=excluded.water_intake,
+            sleep_hours=excluded.sleep_hours
         """,
-        (entry_date, weight, steps, water_intake, sleep_hours),
+        (user_id, entry_date, weight, steps, water_intake, sleep_hours),
     )
 
     conn.commit()
     new_id = cursor.lastrowid
     conn.close()
 
-    return jsonify({"message": "Entry created", "id": new_id}), 201
+    return jsonify({"message": "Entry saved", "id": new_id}), 201
 
 
 @health_bp.route("/health", methods=["GET"])
@@ -57,6 +68,10 @@ def get_health_entries():
     """
     days = request.args.get("days", default=7, type=int)
 
+    user_id = get_current_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -65,10 +80,11 @@ def get_health_entries():
         """
         SELECT id, entry_date, weight, steps, water_intake, sleep_hours, created_at
         FROM health_logs
+        WHERE user_id = ?
         ORDER BY entry_date DESC
         LIMIT ?
         """,
-        (days,),
+        (user_id, days),
     )
 
     rows = cursor.fetchall()

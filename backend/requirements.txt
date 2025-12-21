@@ -1,14 +1,16 @@
-Flask==3.0.3
-Flask-Cors==4.0.0
+Flask>=3.0.0,<4
+Flask-Cors>=4.0.0,<5
 
-pydantic==2.7.1
-pydantic-core==2.18.2
+# Data + ML
+numpy>=1.26.0,<3
+pandas>=2.2.0,<3
+scikit-learn>=1.4.0,<2
+joblib>=1.4.0,<2
 
-numpy==1.26.4
-pandas==2.2.2
-scikit-learn==1.4.2
-joblib==1.4.2
+# Dates (pandas dependencies / compatibility)
+python-dateutil>=2.9.0
+pytz>=2024.1
 
-# Optional but recommended for Windows when using pandas
-python-dateutil==2.9.0.post0
-pytz==2024.1
+# If you truly use pydantic in your project, keep it.
+# Remove pydantic completely if you are not using it anywhere.
+pydantic>=2.7.0,<3

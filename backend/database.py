@@ -1,98 +1,125 @@
-
-import sqlite3
-from pathlib import Path
-
-# Path to the SQLite DB file (health.db in backend folder)
-BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "health.db"
+import os
+import psycopg2
+import psycopg2.extras
 
 
 def get_connection():
     """
-    Create a database connection and return the connection object.
+    Create a PostgreSQL database connection using DATABASE_URL.
+    Returns a connection whose cursor can return dict-like rows.
     """
-    conn = sqlite3.connect(DB_PATH)
-    # Return rows as dict-like objects
-    conn.row_factory = sqlite3.Row
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise RuntimeError("DATABASE_URL is not set. Add it to your environment variables.")
+
+    # Dict-like rows
+    conn = psycopg2.connect(db_url, cursor_factory=psycopg2.extras.RealDictCursor)
     return conn
 
 
 def init_db():
     """
-    Create the required tables if they don't exist.
+    Create the required tables if they don't exist, and evolve schema safely.
 
-    Notes (SQLite):
-    - If you already created health.db earlier, this function will try to
-      evolve the schema (add user_id + unique index) without deleting data.
+    Postgres notes:
+    - Uses CREATE TABLE IF NOT EXISTS
+    - Uses ALTER TABLE ADD COLUMN IF NOT EXISTS (safe schema evolution)
+    - Enforces one entry per user per day via UNIQUE(user_id, entry_date)
     """
     conn = get_connection()
-    cursor = conn.cursor()
+    cur = conn.cursor()
 
-    # --- Users table (very small auth layer) ---
-    cursor.execute(
+    # --- Users table ---
+    cur.execute(
         """
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id BIGSERIAL PRIMARY KEY,
             username TEXT NOT NULL UNIQUE,
             email TEXT UNIQUE,
             password_hash TEXT NOT NULL,
-            is_verified INTEGER DEFAULT 0,
+            is_verified BOOLEAN DEFAULT FALSE,
             verification_token TEXT,
-            verification_sent_at TIMESTAMP,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            verification_sent_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ DEFAULT NOW()
         );
         """
     )
 
-    cursor.execute(
+    # --- Health logs table ---
+    # Use DATE instead of TEXT for entry_date (better querying + comparisons)
+    cur.execute(
         """
         CREATE TABLE IF NOT EXISTS health_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            entry_date TEXT NOT NULL,
-            weight REAL,
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+            entry_date DATE NOT NULL,
+            weight DOUBLE PRECISION,
             steps INTEGER,
-            water_intake REAL,
-            sleep_hours REAL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            ,FOREIGN KEY (user_id) REFERENCES users(id)
+            water_intake DOUBLE PRECISION,
+            sleep_hours DOUBLE PRECISION,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            CONSTRAINT uq_health_user_date UNIQUE (user_id, entry_date)
         );
         """
     )
 
-    # If an older DB exists without user_id, add the column.
-    cursor.execute("PRAGMA table_info(health_logs);")
-    cols = [r[1] for r in cursor.fetchall()]  # (cid, name, type, notnull, dflt, pk)
-    if "user_id" not in cols:
-        cursor.execute("ALTER TABLE health_logs ADD COLUMN user_id INTEGER;")
+    # ---- Schema evolution (if your old DB schema is missing columns) ----
+    # These are safe even if the column already exists.
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token TEXT;")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_sent_at TIMESTAMPTZ;")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();")
 
-    # If users table exists but older schema missing new columns, add them
-    cursor.execute("PRAGMA table_info(users);")
-    user_cols = [r[1] for r in cursor.fetchall()]
-    if "email" not in user_cols:
-        cursor.execute("ALTER TABLE users ADD COLUMN email TEXT;")
-    if "is_verified" not in user_cols:
-        cursor.execute("ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0;")
-    if "verification_token" not in user_cols:
-        cursor.execute("ALTER TABLE users ADD COLUMN verification_token TEXT;")
-    if "verification_sent_at" not in user_cols:
-        cursor.execute("ALTER TABLE users ADD COLUMN verification_sent_at TIMESTAMP;")
+    cur.execute("ALTER TABLE health_logs ADD COLUMN IF NOT EXISTS user_id BIGINT;")
+    cur.execute("ALTER TABLE health_logs ADD COLUMN IF NOT EXISTS entry_date DATE;")
+    cur.execute("ALTER TABLE health_logs ADD COLUMN IF NOT EXISTS weight DOUBLE PRECISION;")
+    cur.execute("ALTER TABLE health_logs ADD COLUMN IF NOT EXISTS steps INTEGER;")
+    cur.execute("ALTER TABLE health_logs ADD COLUMN IF NOT EXISTS water_intake DOUBLE PRECISION;")
+    cur.execute("ALTER TABLE health_logs ADD COLUMN IF NOT EXISTS sleep_hours DOUBLE PRECISION;")
+    cur.execute("ALTER TABLE health_logs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();")
 
-    # Enforce: one entry per user per day
-    cursor.execute(
+    # Ensure FK exists (older DB might not have it). This is a safe pattern:
+    # Create constraint only if not exists (Postgres doesn't support IF NOT EXISTS for ADD CONSTRAINT directly),
+    # so we check in pg_constraint first.
+    cur.execute(
         """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_health_user_date
-        ON health_logs(user_id, entry_date);
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'fk_health_logs_user'
+            ) THEN
+                ALTER TABLE health_logs
+                ADD CONSTRAINT fk_health_logs_user
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+            END IF;
+        END $$;
         """
     )
 
-    # Add unique index on email for quick lookup and uniqueness (if not exist)
-    cursor.execute(
+    # Ensure unique constraint exists (same issue: no IF NOT EXISTS for constraint name)
+    cur.execute(
         """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email
-        ON users(email);
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'uq_health_user_date'
+            ) THEN
+                ALTER TABLE health_logs
+                ADD CONSTRAINT uq_health_user_date UNIQUE (user_id, entry_date);
+            END IF;
+        END $$;
         """
     )
+
+    # Helpful indexes (optional but good)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_health_logs_user_id ON health_logs(user_id);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_health_logs_entry_date ON health_logs(entry_date);")
 
     conn.commit()
+    cur.close()
     conn.close()

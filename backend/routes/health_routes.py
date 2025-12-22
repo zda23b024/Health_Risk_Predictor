@@ -53,11 +53,41 @@ def add_health_entry():
         (user_id, entry_date, weight, steps, water_intake, sleep_hours),
     )
 
+
     conn.commit()
     new_id = cursor.lastrowid
     conn.close()
 
     return jsonify({"message": "Entry saved", "id": new_id}), 201
+
+health_bp = Blueprint("health", __name__)
+
+@health_bp.route("/health/log", methods=["POST"])
+def log_health():
+    user_id = get_current_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json() or {}
+    weight = data.get("weight")
+    steps = data.get("steps")
+    water_intake = data.get("water_intake")
+    sleep_hours = data.get("sleep_hours")
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "INSERT INTO health_logs (user_id, weight, steps, water_intake, sleep_hours) VALUES (?, ?, ?, ?, ?)",
+            (user_id, weight, steps, water_intake, sleep_hours),
+        )
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": "Failed to save health log", "details": str(e)}), 500
+
+    conn.close()
+    return jsonify({"message": "Health log saved successfully"}), 201
 
 
 @health_bp.route("/health", methods=["GET"])

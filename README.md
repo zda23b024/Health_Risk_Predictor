@@ -86,3 +86,7 @@ A simple health risk predictor web app (Flask backend + React frontend).
 ## Video Presentation
 -The video presentation is found in the drive link below 
 -https://drive.google.com/drive/folders/1jaYCTagF0QM-m6wTJxdf3CMaU-vcCJVy?usp=sharing
+
+---
+## Render Cloud Deployment
+-https://health-risk-predictor-1-ksh0.onrender.com

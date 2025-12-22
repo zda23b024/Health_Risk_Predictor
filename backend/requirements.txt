@@ -6,3 +6,5 @@ python-dotenv==1.0.1
 
 numpy==2.1.0
 pandas==2.2.3
+joblib==1.5.3
+scikit-learn==1.7.0

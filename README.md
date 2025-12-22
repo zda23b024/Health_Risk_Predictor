@@ -19,13 +19,14 @@ A simple health risk predictor web app (Flask backend + React frontend).
   npm: none — backend uses pip
 
   ```powershell
+  cd backend
   pip install -r requirements.txt
   ```
 
 - Start the backend server (dev):
 
   ```powershell
-  python -m app
+  python app.py
   ```
 
   By default the backend listens on host port 5000. When running with Docker we map container port 5000 to host port 5001 to avoid conflicts.

@@ -38,12 +38,12 @@ A simple health risk predictor web app (Flask backend + React frontend).
 
   ```powershell
   npm install
-  $env:REACT_APP_API_URL = "http://localhost:5001"  # point to backend port used by docker or your local backend
-  $env:PORT = "3001"  # optional: change dev server port
+  $env:REACT_APP_API_URL = "http://localhost:5000"  
+  $env:PORT = "3000"  # optional: change dev server port
   npm start
   ```
 
-- Open the UI in your browser at: http://localhost:3001
+- Open the UI in your browser at: http://localhost:3000
 
 ---
 

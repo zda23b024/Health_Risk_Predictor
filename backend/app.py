@@ -7,18 +7,20 @@ from routes.health_routes import health_bp
 from routes.stats_routes import stats_bp
 from routes.predict_routes import predict_bp
 from routes.auth_routes import auth_bp
+from dotenv import load_dotenv
+load_dotenv()
 
 
 def create_app():
     app = Flask(__name__)
 
-    # Optional: keep config centralized
+    # Centralized config
     app.config["DATABASE_URL"] = os.getenv("DATABASE_URL")
 
     # CORS (Render + local)
     allowed_origins = os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:5173"
+        "http://localhost:5173,https://health-risk-predictor-1-ksh0.onrender.com"
     )
     CORS(app, resources={r"/*": {"origins": allowed_origins.split(",")}})
 
@@ -28,7 +30,7 @@ def create_app():
     app.register_blueprint(predict_bp)
     app.register_blueprint(auth_bp)
 
-    # Initialize DB (safe to call on startup)
+    # Initialize DB
     with app.app_context():
         init_db()
 
